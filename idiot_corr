@@ -1,0 +1,249 @@
+library(dplyr)
+library(ggplot2)
+library(readxl)  
+
+dFC_df <- read.csv("meansim.csv")
+
+dFC_df$src_subject_id <- gsub("sub-HCP", "", dFC_df$src_subject_id)
+
+cog_df <- read_excel("cogcomp01.xlsx")
+
+cog_df$src_subject_id <- gsub("sub-HCP", "", cog_df$src_subject_id)
+
+cog_df[cog_df==999]=NA
+
+new_df=merge(cog_df, dFC_df, by = "src_subject_id")
+
+meansim_columns <- c("State_1", "State_2", "State_3", "State_4", "State_5", "State_6")
+nmeansim=length(meansim_columns)
+
+cognition_columns <- c("Fluid Cognition Composite Score Age Adjusted",
+                       "Crystal Cognition Composite Score Age adjusted",
+                       "Total Cognition Composite Score Age adjusted")
+
+ncog=length(cognition_columns)
+
+#Define values.
+val_pred <- meansim_columns
+
+#For each value.
+for (val_lab in val_pred) {
+  
+  na_indicator=is.na(new_df[,val_lab])
+  
+  #Produce residuals.
+  inform <- as.formula(paste0(val_lab,'~',"Age"))
+  respred <- resid(lm(inform,data=new_df[!na_indicator,]))
+  
+  #Replace.
+  new_df[!na_indicator,val_lab] <- respred
+}
+
+str(new_df)
+
+plots <-data.frame(matrix(NA,nmeansim,ncog))
+rownames(plots)=meansim_columns
+colnames(plots)=cognition_columns 
+plots_p=plots
+
+for (cog in cognition_columns) {
+  for (meansim in meansim_columns) {
+    corr_value <- cor(new_df[,cog], new_df[,meansim], use = "complete.obs")
+    corr_p <- cor.test(new_df[,cog], new_df[,meansim], use = "complete.obs")$p.value
+    
+    plots[meansim,cog]=round(corr_value,3)
+    plots_p[meansim,cog]=corr_p
+  }
+}
+
+
+print(plots[[1]]) 
+write.csv(plots, file = "/Users/ifrahismail/Downloads/plots.csv", row.names = TRUE)
+
+
+p_values_df <- as.data.frame(plots_p)
+p_values_vec <- c(p_values_df[,"Fluid Cognition Composite Score Age Adjusted"],p_values_df[,"Crystal Cognition Composite Score Age adjusted"],
+                  p_values_df[,"Total Cognition Composite Score Age adjusted"])
+
+
+
+p_sig=p_values_vec
+#p_sig[p_sig>=0.05]=NA
+
+names(p_sig)=c(paste0("F_",meansim_columns),paste0("C_",meansim_columns),paste0("T_",meansim_columns))
+
+
+adjusted_p_values <- p.adjust(p_values_vec, method = "BH")
+adjusted_p_sig <- adjusted_p_values
+#adjusted_p_sig[adjusted_p_sig>=0.05]=NA
+
+names(adjusted_p_sig)=c(paste0("F_",meansim_columns),paste0("C_",meansim_columns),paste0("T_",meansim_columns))
+
+# patients ----------------------------------------------------------------
+
+
+soc_cg <- read.table("psychosocial01.txt", sep = "\t", header = TRUE)
+soc_cg_selected <- soc_cg %>% select(src_subject_id, lifedx)
+
+
+dFC_df <- read.csv("meansim.csv")
+
+dFC_df$src_subject_id <- gsub("sub-HCP", "", dFC_df$src_subject_id)
+
+cog_df <- read_excel("cogcomp01.xlsx")
+
+cog_df$src_subject_id <- gsub("sub-HCP", "", cog_df$src_subject_id)
+
+cog_df[cog_df==999]=NA
+
+new_df=merge(cog_df, dFC_df, by = "src_subject_id")
+
+new_df=merge(cog_df, dFC_df, by = "src_subject_id")
+new_df=merge(new_df, soc_cg_selected, by = "src_subject_id")
+meansim_columns <- c("State_1", "State_2", "State_3", "State_4", "State_5", "State_6")
+nmeansim=length(meansim_columns)
+
+new_df <- new_df %>% filter(lifedx %in% c(1, 2, 4, 5, 6))  
+
+#Define values.
+val_pred <- meansim_columns
+
+#For each value.
+for (val_lab in val_pred) {
+  
+  na_indicator=is.na(new_df[,val_lab])
+  
+  #Produce residuals.
+  inform <- as.formula(paste0(val_lab,'~',"Age"))
+  respred <- resid(lm(inform,data=new_df[!na_indicator,]))
+  
+  #Replace.
+  new_df[!na_indicator,val_lab] <- respred
+}
+
+
+cognition_columns <- c("Fluid Cognition Composite Score Age Adjusted",
+                       "Crystal Cognition Composite Score Age adjusted",
+                       "Total Cognition Composite Score Age adjusted")
+
+ncog=length(cognition_columns)
+
+str(new_df)
+
+
+plots <-data.frame(matrix(NA,nmeansim,ncog))
+rownames(plots)=meansim_columns
+colnames(plots)=cognition_columns 
+plots_p=plots
+
+for (cog in cognition_columns) {
+  for (meansim in meansim_columns) {
+    corr_value <- cor(new_df[,cog], new_df[,meansim], use = "complete.obs")
+    corr_p <- cor.test(new_df[,cog], new_df[,meansim], use = "complete.obs")$p.value
+    
+    plots[meansim,cog]=corr_value
+    plots_p[meansim,cog]=corr_p
+  }
+}
+
+p_values_df <- as.data.frame(plots_p)
+p_values_vec <- c(p_values_df[,"Fluid Cognition Composite Score Age Adjusted"],p_values_df[,"Crystal Cognition Composite Score Age adjusted"],
+                  p_values_df[,"Total Cognition Composite Score Age adjusted"])
+
+
+p_sig=p_values_vec
+p_sig[p_sig>=0.05]=NA
+
+names(p_sig)=c(paste0("F_",meansim_columns),paste0("C_",meansim_columns),paste0("T_",meansim_columns))
+
+
+adjusted_p_values <- p.adjust(p_values_vec, method = "BH")
+adjusted_p_sig <- adjusted_p_values
+adjusted_p_sig[adjusted_p_sig>=0.05]=NA
+
+names(adjusted_p_sig)=c(paste0("F_",meansim_columns),paste0("C_",meansim_columns),paste0("T_",meansim_columns))
+
+# Healthy ----------------------------------------------------------------
+
+
+soc_cg <- read.table("psychosocial01.txt", sep = "\t", header = TRUE)
+soc_cg_selected <- soc_cg %>% select(src_subject_id, lifedx)
+
+
+dFC_df <- read.csv("meansim.csv")
+
+dFC_df$src_subject_id <- gsub("sub-HCP", "", dFC_df$src_subject_id)
+
+cog_df <- read_excel("cogcomp01.xlsx")
+
+cog_df$src_subject_id <- gsub("sub-HCP", "", cog_df$src_subject_id)
+
+cog_df[cog_df==999]=NA
+
+new_df=merge(cog_df, dFC_df, by = "src_subject_id")
+
+new_df=merge(cog_df, dFC_df, by = "src_subject_id")
+new_df=merge(new_df, soc_cg_selected, by = "src_subject_id")
+meansim_columns <- c("State_1", "State_2", "State_3", "State_4", "State_5", "State_6")
+nmeansim=length(meansim_columns)
+
+new_df <- new_df %>% filter(lifedx %in% c(3))  
+
+#Define values.
+val_pred <- meansim_columns
+
+#For each value.
+for (val_lab in val_pred) {
+  
+  na_indicator=is.na(new_df[,val_lab])
+  
+  #Produce residuals.
+  inform <- as.formula(paste0(val_lab,'~',"Age"))
+  respred <- resid(lm(inform,data=new_df[!na_indicator,]))
+  
+  #Replace.
+  new_df[!na_indicator,val_lab] <- respred
+}
+
+
+cognition_columns <- c("Fluid Cognition Composite Score Age Adjusted",
+                       "Crystal Cognition Composite Score Age adjusted",
+                       "Total Cognition Composite Score Age adjusted")
+
+ncog=length(cognition_columns)
+
+str(new_df)
+
+
+plots <-data.frame(matrix(NA,nmeansim,ncog))
+rownames(plots)=meansim_columns
+colnames(plots)=cognition_columns 
+plots_p=plots
+
+for (cog in cognition_columns) {
+  for (meansim in meansim_columns) {
+    corr_value <- cor(new_df[,cog], new_df[,meansim], use = "complete.obs")
+    corr_p <- cor.test(new_df[,cog], new_df[,meansim], use = "complete.obs")$p.value
+    
+    plots[meansim,cog]=corr_value
+    plots_p[meansim,cog]=corr_p
+  }
+}
+
+p_values_df <- as.data.frame(plots_p)
+p_values_vec <- c(p_values_df[,"Fluid Cognition Composite Score Age Adjusted"],p_values_df[,"Crystal Cognition Composite Score Age adjusted"],
+                  p_values_df[,"Total Cognition Composite Score Age adjusted"])
+
+
+p_sig=p_values_vec
+p_sig[p_sig>=0.05]=NA
+
+names(p_sig)=c(paste0("F_",meansim_columns),paste0("C_",meansim_columns),paste0("T_",meansim_columns))
+
+
+adjusted_p_values <- p.adjust(p_values_vec, method = "BH")
+adjusted_p_sig <- adjusted_p_values
+adjusted_p_sig[adjusted_p_sig>=0.05]=NA
+
+names(adjusted_p_sig)=c(paste0("F_",meansim_columns),paste0("C_",meansim_columns),paste0("T_",meansim_columns))
+
