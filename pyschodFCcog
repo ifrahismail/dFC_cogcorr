@@ -1,0 +1,99 @@
+library(dplyr)
+library(readxl)  
+
+dFC_ms <- read.csv("meansim.csv")
+dFC_tm <- read.csv("transmean.csv")
+dFC_as <- read.csv("avg_substat.csv")
+dFC_cg <- read_excel("cogcomp01.xlsx")
+soc_cg <- read.table("psychosocial01.txt", sep = "\t", header = TRUE)
+
+dFC_ms$src_subject_id <- gsub("sub-HCP", "", dFC_ms$src_subject_id)
+dFC_tm$src_subject_id <- gsub("sub-HCP", "", dFC_tm$src_subject_id)
+dFC_as$src_subject_id <- gsub("sub-HCP", "", dFC_as$src_subject_id)
+dFC_cg$src_subject_id <- gsub("sub-HCP", "", dFC_cg$src_subject_id)
+soc_cg$src_subject_id <- gsub("sub-HCP", "", soc_cg$src_subject_id)
+
+dFC_ms_selected <- dFC_ms %>% select(src_subject_id, State_1, State_2, State_3, State_4, State_5, State_6)
+dFC_tm_selected <- dFC_tm %>% select(src_subject_id, X1t1:X6t6)
+dFC_as_selected <- dFC_as %>% select(src_subject_id, dwell_1, dwell_2, dwell_3, dwell_4, dwell_5, dwell_6)
+dFC_cg_selected <- dFC_cg %>% select(src_subject_id, "Fluid Cognition Composite Score Age Adjusted", "Crystal Cognition Composite Score Age adjusted", "Total Cognition Composite Score Age adjusted")
+soc_cg_selected <- soc_cg %>% select(src_subject_id, lifedx)
+
+merged_df1 <- merge(dFC_ms_selected, dFC_tm_selected, by = "src_subject_id")
+nw_dFC <- merge(merged_df1,dFC_as, by = "src_subject_id")
+wn_dFC <- merge(nw_dFC,dFC_cg_selected, by = "src_subject_id")
+cg_dFC <- merge(wn_dFC, soc_cg_selected, by = "src_subject_id")
+
+
+
+##separate patients from control
+
+patients_df <- cg_dFC %>% filter(lifedx %in% c(1, 2, 5, 6))  
+controls_df <- cg_dFC %>% filter(lifedx == 3)                  
+
+print(paste("Number of psychiatric patients:", nrow(patients_df)))
+print(paste("Number of healthy controls:", nrow(controls_df)))
+
+head(patients_df)
+head(controls_df)
+
+table(cg_dFC$lifedx)
+
+## T_TEST TIMEEEEE
+
+metrics_ms <- c("State_1", "State_2", "State_3", "State_4", "State_5", "State_6")
+metrics_tm <- c("X1t1", "X1t2", "X1t3", "X1t4", "X1t5", "X1t6", "X2t1", "X2t2", "X2t3", "X2t4", "X2t5", "X2t6", "X3t1", "X3t2", "X3t3", "X3t4", "X3t5", "X3t6", "X4t1", "X4t2", "X4t3", "X4t4", "X4t5", "X4t6", "X5t1", "X5t2", "X5t3", "X5t4", "X5t5", "X5t6", "X6t1", "X6t2", "X6t3", "X6t4", "X6t5", "X6t6")
+metrics_as <- c("dwell_1", "dwell_2", "dwell_3", "dwell_4", "dwell_5", "dwell_6")
+
+perform_t_tests <- function(patients_df, controls_df, metrics_list) {
+  results <- data.frame(Metric = character(), p_value = numeric(), stringsAsFactors = FALSE)
+  
+  for (metric in metrics_list) {
+    if (metric %in% names(patients_df) & metric %in% names(controls_df)) {
+      patients_data <- patients_df[[metric]]
+      controls_data <- controls_df[[metric]]
+      
+      # Perform t-test
+      t_test_result <- t.test(patients_data, controls_data)
+      
+      # Collect results
+      results <- rbind(results, data.frame(Metric = metric, p_value = t_test_result$p.value))
+    } else {
+      warning(paste("Metric", metric, "not found in one of the dataframes."))
+    }
+  }
+  
+  return(results)
+}
+
+# Perform t-tests for each metrics list
+t_test_results_ms <- perform_t_tests(patients_df, controls_df, metrics_ms)
+t_test_results_tm <- perform_t_tests(patients_df, controls_df, metrics_tm)
+t_test_results_as <- perform_t_tests(patients_df, controls_df, metrics_as)
+
+# Function to adjust p-values
+adjust_p_values <- function(t_test_results) {
+  t_test_results$adjusted_p_value <- p.adjust(t_test_results$p_value, method = "fdr")
+  return(t_test_results)
+}
+
+# Adjust p-values for each metrics list
+t_test_results_ms_adj <- adjust_p_values(t_test_results_ms)
+t_test_results_tm_adj <- adjust_p_values(t_test_results_tm)
+t_test_results_as_adj <- adjust_p_values(t_test_results_as)
+
+# Print adjusted results
+p_sig_ms=t_test_results_ms_adj
+p_sig_ms[p_sig_ms>=0.05]=NA
+p_sig_ms[,1]=t_test_results_ms_adj[,1]
+print(p_sig_ms)
+
+p_sig_tm=t_test_results_tm_adj
+p_sig_tm[p_sig_tm>=0.05]=NA
+p_sig_tm[,1]=t_test_results_tm_adj[,1]
+print(p_sig_tm)
+
+p_sig_as=t_test_results_as_adj
+p_sig_as[p_sig_as>=0.05]=NA
+p_sig_as[,1]=t_test_results_as_adj[,1]
+print(p_sig_as)
